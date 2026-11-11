@@ -12,7 +12,7 @@ Copy-Item -LiteralPath (Join-Path $root 'build\runtimes') -Destination (Join-Pat
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $root 'dist\LlamaInstanceManager\LICENSE.txt')
 if (-not $Iscc) { $Iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe' }
 if (-not (Test-Path -LiteralPath $Iscc)) { throw 'Inno Setup 6 is required. Supply -Iscc with its ISCC.exe path.' }
-& $Iscc "/DAppVersion=$Version" installer/manager.iss
+& $Iscc /Q "/DAppVersion=$Version" installer/manager.iss
 if ($LASTEXITCODE) { throw 'Setup build failed.' }
 Get-ChildItem -LiteralPath (Join-Path $root 'dist') -Filter '*-setup.exe' | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

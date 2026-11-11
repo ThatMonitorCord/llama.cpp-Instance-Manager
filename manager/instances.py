@@ -178,6 +178,16 @@ class Instances:
         root.parent.mkdir(parents=True, exist_ok=True)
         self.store.update_instance(instance["id"], install_state="installing", install_error="", models_dir=models_dir)
         progress(f"{instance['name']}: downloading upstream LLama-GUI")
+        if not (root / "server.py").is_file():
+            # Git can leave its metadata behind after an interrupted clone.
+            # Resume only a checkout that still points to the intended upstream.
+            if (root / ".git").exists():
+                existing = subprocess.run([tool("git"), "-C", str(root), "remote", "get-url", "origin"],
+                                          capture_output=True, text=True, timeout=20, **hidden_process())
+                if existing.returncode or existing.stdout.strip() != UPSTREAM:
+                    raise ValueError("The incomplete checkout does not point to upstream LLama-GUI.")
+                self.command([tool("git"), "fetch", "origin", "main"], root, progress)
+                self.command([tool("git"), "checkout", "-B", "main", "origin/main"], root, progress)
         if not (root / ".git").exists():
             if root.exists() and any(root.iterdir()):
                 raise ValueError(f"Incomplete checkout at {root}. Choose a new instance folder or clear the incomplete checkout before retrying.")
@@ -186,13 +196,15 @@ class Instances:
         for name in ("python", "git"):
             source = APP_ROOT / "runtimes" / name
             destination = root.parent / "runtime" / name
-            if source.exists() and not destination.exists():
+            if source.exists():
                 progress(f"{instance['name']}: copying its {name} runtime")
-                shutil.copytree(source, destination)
+                shutil.copytree(source, destination, dirs_exist_ok=True)
         base = root.parent / "runtime/python/python.exe"
         python = str(base) if base.exists() else tool("python")
         interpreter = venv_python(root)
-        if not interpreter.exists():
+        pip_ready = interpreter.exists() and subprocess.run([str(interpreter), "-m", "pip", "--version"],
+            capture_output=True, timeout=20, **hidden_process()).returncode == 0
+        if not pip_ready:
             progress(f"{instance['name']}: creating its Python environment")
             self.command([python, "-m", "venv", str(root / ".venv")], root, progress)
         progress(f"{instance['name']}: installing dependencies")

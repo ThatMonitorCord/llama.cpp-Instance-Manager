@@ -49,7 +49,7 @@ class Manager:
         threading.Thread(target=self.poll_local, daemon=True).start()
         threading.Thread(target=self.poll_peers, daemon=True).start()
         for row in self.store.read()["instances"]:
-            if row.get("install_state") == "installing":
+            if row.get("install_state") in ("installing", "pending"):
                 self.store.update_instance(row["id"], install_state="error", install_error="Installation was interrupted. Retry to continue.")
             if row.get("auto_start") and row.get("install_state") == "ready":
                 self.instances.job(f"Start {row['name']}", lambda progress, identity=row["id"]: self.instances.control(identity, "start"))
