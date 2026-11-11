@@ -61,6 +61,20 @@ class LifecycleTests(unittest.TestCase):
                 app.settings({"port":15440})
             startup.assert_not_called()
 
+    def test_upgrade_quit_preserves_instances_and_refuses_active_install(self):
+        app = Manager(self.store)
+        app.server = Mock()
+        app.instances.active_install = True
+        with self.assertRaises(ValueError):
+            app.quit()
+        self.assertFalse(app.stop_event.is_set())
+        app.instances.active_install = False
+        with patch("manager.app.threading.Timer") as timer, patch.object(app.instances,"control") as control:
+            app.quit()
+            timer.assert_called_once()
+            control.assert_not_called()
+        self.assertTrue(app.stop_event.is_set())
+
 
 if __name__ == "__main__":
     unittest.main()

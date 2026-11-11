@@ -45,6 +45,30 @@ Filename: "{app}\LlamaInstanceManager.exe"; Description: "Set up or open your ll
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "LlamaCppInstanceManager"; Flags: uninsdeletevalue dontcreatekey
 
 [Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ExitCode: Integer;
+  Existing: String;
+begin
+  Result := '';
+  Existing := ExpandConstant('{app}\LlamaInstanceManager.exe');
+  if FileExists(Existing) then begin
+    if not Exec(Existing, '--quit --background', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+      Result := 'Close the instance manager before continuing.'
+    else if ExitCode <> 0 then
+      Result := 'Wait for instance installation to finish, then close the manager and try again.';
+  end;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+  ExitCode: Integer;
+begin
+  Result := Exec(ExpandConstant('{app}\LlamaInstanceManager.exe'), '--quit --background', '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  if Result then Result := ExitCode = 0;
+  if not Result then MsgBox('Close the instance manager after its current installation finishes, then try again.', mbError, MB_OK);
+end;
+
 procedure InitializeWizard();
 begin
   WizardForm.WelcomeLabel2.Caption := 'Install the manager, then choose your server name, instance count, ports, and optional shared models folder in the setup wizard.' + #13#10 + #13#10 + 'Python, Git, and the preset runtime are included. Each llama.cpp instance downloads its own original LLama-GUI installation.';

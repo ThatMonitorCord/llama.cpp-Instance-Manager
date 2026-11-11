@@ -22,7 +22,7 @@ Manager defaults to TCP 5239; instance GUIs start at TCP 5240 and inference at
 GET routes: `/api/info`, `/api/config`, `/api/fleet`, `/api/state`, `/api/jobs`,
 `/api/discovery`, `/api/ports`, `/api/presets`, `/api/logs`, `/api/update`.
 POST routes: `/api/setup`, `/api/settings`, `/api/action`, `/api/startup`,
-`/api/connect`, `/api/install`, `/api/disconnect`, `/api/remove`, `/api/firewall`.
+`/api/connect`, `/api/install`, `/api/disconnect`, `/api/remove`, `/api/firewall`, `/api/quit`.
 `/api/state` includes only local instances; peers never recursively aggregate.
 
 Settings and logs live in `%LOCALAPPDATA%\llama.cpp Instance Manager` by default.

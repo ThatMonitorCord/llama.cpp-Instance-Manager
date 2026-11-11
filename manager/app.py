@@ -231,6 +231,13 @@ class Manager:
         return {"current": VERSION, "latest": release["tag_name"].lstrip("v"), "url": release["html_url"],
                 "download": installer["browser_download_url"] if installer else None}
 
+    def quit(self):
+        if self.instances.active_install:
+            raise ValueError("An instance is being installed. Wait for installation to finish before updating the manager.")
+        self.stop_event.set()
+        threading.Timer(0.5, self.server.shutdown).start()
+        return {"ok": True}
+
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -314,6 +321,7 @@ class Handler(BaseHTTPRequestHandler):
             routes = {"/api/setup": app.setup, "/api/settings": app.settings, "/api/action": app.action,
                       "/api/startup": app.startup, "/api/connect": lambda data: app.connect(data.get("url")),
                       "/api/firewall": lambda data: app.instances.job("Allow LAN access", lambda progress: configure_firewall(app.store)),
+                      "/api/quit": lambda data: app.quit(),
                       "/api/install": app.add_instances}
             if self.path in routes:
                 result = routes[self.path](body)
@@ -344,7 +352,26 @@ def main():
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-discovery", action="store_true", help="For isolated test servers")
+    parser.add_argument("--quit", action="store_true", help="Close this manager for an upgrade; instances keep running")
     args = parser.parse_args()
+    if args.quit:
+        settings_file = args.data_dir / "manager.json"
+        if not settings_file.exists():
+            return
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+        url = f"http://127.0.0.1:{settings['port']}"
+        try:
+            info = request(url + "/api/info", timeout=2)
+        except OSError:
+            return
+        if info.get("id") != settings["id"]:
+            raise SystemExit(1)
+        try:
+            request(url + "/api/quit", {}, timeout=3)
+        except (OSError, ValueError):
+            raise SystemExit(1) from None
+        time.sleep(1)
+        return
     store = Store(args.data_dir)
     logging.basicConfig(level=logging.INFO, handlers=[RotatingFileHandler(store.directory / "manager.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")], format="%(asctime)s %(levelname)s %(message)s")
     config = store.read()
