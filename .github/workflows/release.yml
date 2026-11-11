@@ -32,11 +32,13 @@ jobs:
       - name: Verify installed executable and upgrade
         run: .venv/Scripts/python scripts/smoke_installer.py
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Windows-setup
           path: |
             dist/*-setup.exe
             dist/SHA256SUMS.txt
+            .test-data/installer.log
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh

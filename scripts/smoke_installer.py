@@ -17,6 +17,7 @@ def main():
         raise RuntimeError("Windows installer test")
     import winreg
     destination=ROOT/".test-data/installed-app"
+    destination.parent.mkdir(parents=True,exist_ok=True)
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r"Software\Microsoft\Windows\CurrentVersion\Uninstall\{5E8A15A3-7C9C-47A5-A577-16CE0B45B43B}_is1") as key:
             installed=winreg.QueryValueEx(key,"InstallLocation")[0]
@@ -26,7 +27,13 @@ def main():
         pass
     setup=next((ROOT/"dist").glob("*-setup.exe"))
     args=[str(setup),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/NOICONS","/MERGETASKS=!desktopicon",f"/DIR={destination}",f"/LOG={ROOT/'.test-data/installer.log'}"]
-    subprocess.run(args,check=True,timeout=180,**hidden_process())
+    try:
+        subprocess.run(args,check=True,timeout=180,**hidden_process())
+    except subprocess.CalledProcessError:
+        log=ROOT/".test-data/installer.log"
+        if log.exists():
+            print(log.read_text(encoding="utf-8",errors="replace")[-12000:],flush=True)
+        raise
     exe=destination/"LlamaInstanceManager.exe"
     assert exe.is_file()
     for binary in ("runtimes/python/python.exe","runtimes/git/cmd/git.exe","runtimes/node/node.exe"):
