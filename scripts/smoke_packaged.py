@@ -81,6 +81,14 @@ def main():
         print("PASS: packaged assets and loaded-preset reporting",flush=True)
         discovered = request(first[1]+"/api/discovery")["managers"]
         print(f"Discovery on local test interfaces: {len(discovered)} manager(s)",flush=True)
+        subprocess.run([str(exe),"--quit","--background","--data-dir",str(first[0].directory)],check=True,**hidden_process())
+        children[0].wait(timeout=10)
+        assert request(f"http://127.0.0.1:{rows[0]['gui_port']}/api/status")["running"]
+        child = subprocess.Popen([str(exe),"--background","--data-dir",str(first[0].directory)],**hidden_process())
+        children.append(child)
+        state = wait_until(lambda: (data if (data:=request(first[1]+"/api/state"))["instances"] else None))
+        assert state["instances"][0]["loaded_preset"]=="Integration smoke"
+        print("PASS: graceful manager upgrade preserves inference and restores preset identity",flush=True)
     finally:
         for store,url in managers:
             for row in store.read()["instances"]:
@@ -90,7 +98,8 @@ def main():
                     print(f"HTTP cleanup: {exc}",flush=True)
                     Instances(store).control(row["id"],"stop")
         for child in children:
-            child.terminate()
+            if child.poll() is None:
+                child.terminate()
             child.wait(timeout=15)
 
 

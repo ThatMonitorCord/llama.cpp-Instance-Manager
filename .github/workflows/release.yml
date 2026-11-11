@@ -29,6 +29,8 @@ jobs:
           $version = (& .venv/Scripts/python -c "from manager import VERSION; print(VERSION)").Trim()
           if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") { throw 'Tag and application version differ' }
           ./scripts/build.ps1 -Version $version
+      - name: Verify installed executable and upgrade
+        run: .venv/Scripts/python scripts/smoke_installer.py
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-setup
