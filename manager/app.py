@@ -21,7 +21,7 @@ from . import VERSION
 from .config import Store, REPOSITORY, data_directory, label, next_port, port_available, port_number, suggest_ports
 from .discovery import Discovery
 from .instances import Instances, process_for
-from .platform import login_start
+from .platform import login_start, configure_firewall
 from .transport import manager_url, request
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -142,7 +142,15 @@ class Manager:
         self.settings(body)
         result = self.instances.install(rows, body["directory"], shared)
         self.store.change(lambda config: config.update(configured=True))
+        if body.get("firewall"):
+            self.instances.job("Allow LAN access", lambda progress: configure_firewall(self.store))
         return {**result, "port": target_port}
+
+    def add_instances(self, body):
+        result = self.instances.install(body.get("instances"), body.get("directory", ""), body.get("models_dir", ""))
+        if body.get("firewall"):
+            self.instances.job("Allow LAN access", lambda progress: configure_firewall(self.store))
+        return result
 
     def action(self, body):
         server_id = body.get("server_id", self.info()["id"])
@@ -305,7 +313,8 @@ class Handler(BaseHTTPRequestHandler):
             app = self.manager
             routes = {"/api/setup": app.setup, "/api/settings": app.settings, "/api/action": app.action,
                       "/api/startup": app.startup, "/api/connect": lambda data: app.connect(data.get("url")),
-                      "/api/install": lambda data: app.instances.install(data.get("instances"), data.get("directory", ""), data.get("models_dir", ""))}
+                      "/api/firewall": lambda data: app.instances.job("Allow LAN access", lambda progress: configure_firewall(app.store)),
+                      "/api/install": app.add_instances}
             if self.path in routes:
                 result = routes[self.path](body)
             elif self.path == "/api/disconnect":

@@ -1,0 +1,36 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: python -m venv .venv
+      - name: Backend tests
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then PY=.venv/Scripts/python; else PY=.venv/bin/python; fi
+          "$PY" -m pip install -r requirements.txt
+          "$PY" -m unittest discover -s tests -v
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node --check manager/web/app.js
+      - run: node --check manager/web/monitor.js
+      - run: node --check manager/preset_bridge.cjs
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: test-results/

@@ -1,0 +1,10 @@
+{
+  "name": "llama-cpp-instance-manager",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/monitor.test.cjs && playwright test",
+    "test:frontend": "playwright test"
+  },
+  "devDependencies": {"@playwright/test": "^1.56.0"}
+}

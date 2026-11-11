@@ -137,14 +137,19 @@ class Instances:
             if models_dir and not Path(models_dir).is_absolute():
                 raise ValueError("Choose an absolute shared models folder.")
             self.active_install = True
+        def register(config):
+            config["instances"].extend(planned)
+            config["instances_dir"] = str(Path(directory).resolve())
+        try:
+            self.store.change(register)
+        except Exception:
+            with self.guard:
+                self.active_install = False
+            raise
         def run(progress):
             try:
                 if models_dir:
                     Path(models_dir).mkdir(parents=True, exist_ok=True)
-                def register(config):
-                    config["instances"].extend(planned)
-                    config["instances_dir"] = str(Path(directory).resolve())
-                self.store.change(register)
                 failures = []
                 for instance in planned:
                     try:
@@ -290,6 +295,7 @@ start "" "http://127.0.0.1:{instance['gui_port']}/?preset=Manager%%20defaults"
         if completed.returncode:
             raise ValueError("Could not load the saved preset: " + completed.stderr[-1500:])
         launch = json.loads(completed.stdout)
+        launch["fingerprint_data"] = preset["data"]
         args = launch["args"]
         if not any(arg in ("-m", "--model", "-hf", "--hf-repo", "-mu", "--model-url") or arg.startswith(("--model=", "--hf-repo=", "--model-url=")) for arg in args):
             raise ValueError("Choose a model in the instance and save a model/server preset first.")
@@ -322,6 +328,7 @@ start "" "http://127.0.0.1:{instance['gui_port']}/?preset=Manager%%20defaults"
                         if process_for(instance):
                             raise ValueError("Instance did not stop. Open its control panel to check the process.")
                     self.launches.pop(instance_id, None)
+                    self.store.update_instance(instance_id, last_launch=None)
                     if action == "stop":
                         self.errors.pop(instance_id, None)
                         return {"stopped": True}
@@ -330,7 +337,10 @@ start "" "http://127.0.0.1:{instance['gui_port']}/?preset=Manager%%20defaults"
                     launch = self.compile_preset(instance, status)
                     self.api(instance, "/api/launch/preflight", launch, timeout=30)
                     started = self.api(instance, "/api/launch", launch, timeout=30)
-                    self.launches[instance_id] = {"generation": started.get("active_runtime", {}).get("generation"), "preset": instance["preset"]}
+                    process = process_for(instance)
+                    self.launches[instance_id] = {"generation": started.get("active_runtime", {}).get("generation"),
+                                                 "pid": process.pid if process else None, "preset": instance["preset"]}
+                    self.store.update_instance(instance_id, last_launch=self.launches[instance_id])
                     deadline = time.monotonic() + 300
                     while time.monotonic() < deadline:
                         health = self.api(instance, "/api/llama/health", timeout=5)
@@ -349,14 +359,16 @@ start "" "http://127.0.0.1:{instance['gui_port']}/?preset=Manager%%20defaults"
 
     def sample(self, instance):
         result = {**instance, "online": False, "running": False, "error": self.errors.get(instance["id"], "")}
-        if not process_for(instance):
+        process = process_for(instance)
+        if not process:
             return result
+        result["pid"] = process.pid
         try:
             status = self.api(instance, "/api/status", timeout=2)
             result.update(online=True, running=bool(status.get("running")), status=status)
             runtime = status.get("active_runtime") or {}
-            launch = self.launches.get(instance["id"], {})
-            result["loaded_preset"] = runtime.get("preset") or (launch.get("preset") if launch.get("generation") == runtime.get("generation") else None)
+            launch = self.launches.get(instance["id"]) or instance.get("last_launch") or {}
+            result["loaded_preset"] = runtime.get("preset") or (launch.get("preset") if launch.get("pid") == process.pid and launch.get("generation") == runtime.get("generation") else None)
             if status.get("running") and status.get("active_process_tool") == "llama-server":
                 for route, key, is_text in (("metrics", "metrics", True), ("slots", "slots", False)):
                     try:

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en" data-theme="nebula">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>llama.cpp Instance Manager</title>
+  <link rel="icon" href="logo.png"><link rel="stylesheet" href="vendor/tokens.css"><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button id="backdrop" class="backdrop" aria-label="Close navigation" hidden></button>
+  <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+    <div class="brand"><img src="logo.png" alt=""><div><strong>llama.cpp</strong><span>Instance Manager</span></div><button id="close-nav" class="icon mobile" aria-label="Close navigation">×</button></div>
+    <div class="server-disclosure"><details open><summary id="sidebar-server">This server</summary><div id="sidebar-summary" class="muted">Connecting…</div><a id="local-address" href="#">Open manager</a></details></div>
+    <nav><div class="nav-label">MANAGE</div><button class="nav-item active" data-tab="instances" aria-current="page"><span>▦</span> Instances <small id="instance-count">0</small></button><button class="nav-item" data-tab="servers"><span>⌘</span> LAN servers <small id="server-count">1</small></button><div class="nav-label">OBSERVE</div><button class="nav-item" data-tab="monitor"><span>▥</span> Monitor</button><div class="nav-label">MAINTAIN</div><button class="nav-item" data-tab="settings"><span>⚙</span> Settings</button></nav>
+    <div class="sidebar-bottom"><label for="theme">Theme</label><select id="theme"><option value="tokyo">Tokyo</option><option value="nebula" selected>Nebula</option><option value="graphite">Graphite</option><option value="cappuccino">Cappuccino</option><option value="mint">Mint</option></select><small id="version">Instance Manager</small></div>
+  </aside>
+  <main id="main">
+    <header class="topbar"><div class="title-row"><button id="open-nav" class="icon mobile" aria-label="Open navigation" aria-expanded="false">☰</button><div><div class="eyebrow" id="page-eyebrow">YOUR LOCAL INFERENCE</div><h1 id="page-title">Instances</h1></div></div><span id="connection" class="badge">Connecting…</span></header>
+    <div id="notice" role="status" hidden></div>
+    <section id="section-instances" class="section-panel">
+      <div class="section-intro"><p>Your models, running on your machines.</p><button id="add-instances" class="primary">＋ Add instances</button></div>
+      <div class="overview"><div><span>Instances</span><strong id="total-instances">0</strong></div><div><span>Running models</span><strong id="running-instances">0</strong></div><div><span>Connected servers</span><strong id="total-servers">1</strong></div></div>
+      <div class="toolbar"><label>Server <select id="instance-filter"><option value="all">All servers</option></select></label><label class="search">Find an instance <input id="instance-search" type="search" placeholder="Name or model…"></label></div>
+      <div id="instance-list" class="instance-grid"></div><div id="instance-empty" class="empty" hidden>No instances yet. Add an instance to get started.</div>
+    </section>
+    <section id="section-monitor" class="section-panel" hidden>
+      <div class="section-intro"><p>Inference activity and hardware, together.</p><span id="sample-time" class="muted"></span></div>
+      <div class="toolbar"><label>Server <select id="monitor-filter"><option value="all">All servers</option></select></label><label class="check"><input id="show-individual" type="checkbox" checked> Show individual instances</label><button id="restore-cards">Restore hidden cards</button></div>
+      <div id="monitor-cards" class="monitor-grid"></div>
+      <details class="card logs"><summary>Instance output</summary><div class="toolbar"><label>Instance <select id="log-instance"></select></label><button id="refresh-logs">Refresh</button><label class="check"><input id="follow-logs" type="checkbox" checked> Follow output</label></div><pre id="log-output">Select an instance to view its output.</pre></details>
+    </section>
+    <section id="section-servers" class="section-panel" hidden>
+      <div class="section-intro"><p>Connect the other managers on your LAN.</p><button id="scan">↻ Discover servers</button></div>
+      <div id="connected-servers" class="instance-grid"></div>
+      <div class="card"><h2>Discovered on your LAN</h2><div id="discovered">Looking for managers…</div></div>
+      <details class="card"><summary>Add by address</summary><form id="connect-form" class="inline-form"><label>Manager address<input id="peer-url" placeholder="192.168.1.20:5239" required></label><button type="submit" class="primary">Connect</button></form></details>
+    </section>
+    <section id="section-settings" class="section-panel" hidden>
+      <form id="settings-form" class="card settings-card"><h2>This server</h2><label>Server name<input id="settings-name" maxlength="100" required></label><label>Manager port<input id="settings-port" type="number" min="1024" max="65535" required></label><label class="check"><input id="settings-login" type="checkbox"> Start manager when I sign in to Windows</label><button class="primary">Save settings</button></form>
+      <div class="card settings-card"><h2>LAN access</h2><p>Allow this manager and its instance ports through Windows Firewall on private networks.</p><button id="allow-lan">Allow LAN access</button></div>
+      <div class="card settings-card"><h2>Manager updates</h2><p id="update-status">Updates come from ThatMonitorCord/llama.cpp-Instance-Manager.</p><div class="actions"><button id="check-update">Check for updates</button><a id="download-update" class="button primary" hidden>Download setup</a></div></div>
+      <details class="card"><summary>Installation locations</summary><p id="data-path" class="mono"></p><p>Manage each instance’s backend, models, presets, and application updates in its own control panel.</p></details>
+    </section>
+    <details class="card activity" id="activity" hidden open><summary>Activity <span id="activity-count"></span></summary><div id="jobs"></div></details>
+    <footer>llama.cpp Instance Manager <span>Built around <a href="https://github.com/thomas9120/LLama-GUI" target="_blank" rel="noopener">LLama-GUI</a></span></footer>
+  </main>
+  <dialog id="setup-dialog" class="wizard">
+    <form id="setup-form">
+      <div class="dialog-heading"><div><div class="eyebrow">LLAMA.CPP INSTANCE MANAGER</div><h2 id="setup-title">Set up your server</h2></div><button type="button" id="cancel-setup" class="icon" aria-label="Close setup">×</button></div>
+      <ol class="steps"><li data-step="0" class="active">1 <span>Server</span></li><li data-step="1">2 <span>Instances</span></li><li data-step="2">3 <span>LAN & review</span></li></ol>
+      <div class="wizard-page" data-page="0"><div id="server-fields"><label>Server name<input id="setup-name" maxlength="100" required></label><label>Manager port<input id="setup-port" type="number" min="1024" max="65535" required></label><label class="check"><input id="setup-login" type="checkbox" checked> Start manager when I sign in to Windows</label></div><label>Instance installation folder<input id="setup-directory" required></label><label>Number of llama.cpp instances<input id="setup-count" type="number" min="1" max="100" value="1" required></label><label class="check"><input id="setup-share" type="checkbox"> Share a models folder between these instances</label><label id="shared-folder-label" hidden>Shared models folder<input id="setup-models" placeholder="D:\Models"></label></div>
+      <div class="wizard-page" data-page="1" hidden><h3>Choose names and ports</h3><p class="muted">Available ports are suggested automatically. Each instance has its own control panel and inference API.</p><div class="port-table"><div class="port-row port-heading"><span>Instance name</span><span>Control panel</span><span>Inference API</span></div><div id="setup-rows"></div></div><button type="button" id="rescan-ports">Find available ports again</button></div>
+      <div class="wizard-page" data-page="2" hidden><h3>Ready to install</h3><div id="setup-review"></div><h3>Other servers on your LAN</h3><div id="setup-discovery">Looking for managers…</div><button type="button" id="setup-scan">↻ Discover again</button><p class="muted">After installation, open each instance to choose its backend and model, then save a server preset for auto-start.</p></div>
+      <label class="check"><input id="setup-firewall" type="checkbox" checked> Allow LAN access through Windows Firewall (Windows approval)</label>
+      <p id="setup-error" class="error" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="setup-back" hidden>Back</button><button type="button" id="setup-next" class="primary">Continue</button><button type="submit" id="setup-install" class="primary" hidden>Install instances</button></div>
+    </form>
+  </dialog>
+  <dialog id="startup-dialog"><form id="startup-form"><div class="dialog-heading"><h2 id="startup-title">Instance startup</h2><button type="button" class="icon" data-close="startup-dialog" aria-label="Close">×</button></div><label>Saved model/server preset<select id="startup-preset"><option value="">Choose a preset</option></select></label><label class="check"><input id="startup-auto" type="checkbox"> Start control panel and selected preset with the manager</label><p id="startup-help" class="muted">Create presets in the instance’s original control panel.</p><div class="dialog-actions"><button type="button" data-close="startup-dialog">Cancel</button><button class="primary">Save startup settings</button></div></form></dialog>
+  <dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title"></h2><p id="confirm-message"></p><div class="dialog-actions"><button value="cancel">Cancel</button><button value="confirm" class="primary">Confirm</button></div></form></dialog>
+  <script src="vendor/inference-stats.js"></script><script src="monitor.js"></script><script src="app.js"></script>
+</body></html>

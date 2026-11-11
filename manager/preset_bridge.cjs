@@ -8,7 +8,7 @@ const root = path.resolve(input.root);
 const context = vm.createContext({window: {LlamaGui: {}}, console: {warn: () => {}, debug: () => {}}});
 const html = fs.readFileSync(path.join(root, "ui/index.html"), "utf8");
 const scripts = [...html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/g)]
-    .map(match => match[1].split("?")[0]).filter(src => src.startsWith("js/flags/"));
+    .map(match => match[1].split("?")[0].replace(/^\//, "")).filter(src => src.startsWith("js/flags/"));
 if (!scripts.length) throw new Error("This instance's flag definitions could not be located.");
 for (const src of [...scripts, "js/flag-core.js"]) {
     const file = path.resolve(root, "ui", src);
