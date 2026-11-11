@@ -1,79 +1,14 @@
-# AGENTS.md
+# Instance Manager
 
-## Workflow
+This repository packages independent, unmodified installations of
+thomas9120/LLama-GUI. Do not patch those installations or redirect their updates.
+Only the manager and installer update from this fork.
 
-- Read `docs/directory.md` before non-trivial work; it contains the architecture, module map, and canonical frontend script order. See `docs/tests.md` for test coverage and commands.
-- Keep diffs minimal, reuse existing helpers, and fix root causes. Start in the owning module; touch others only as needed.
-- When adding/reordering frontend scripts, preserve dependency order and update `docs/directory.md`.
-- When adding/removing backend routes, update the Route Modules table and endpoint count in `docs/directory.md`. `tests/backend/test_docs_sync.py` checks it.
+Read docs/directory.md and docs/tests.md before substantial changes.
+Keep the manager small. LAN discovery and control use plain HTTP without auth.
+Reuse upstream theme tokens and menu interactions. No fact-checking disclaimers
+in product UI. Instance-facing labels say "llama.cpp instance".
 
-## Frontend
-
-- **One source of truth:** Configure, Quick Launch, Chat, and command preview must read shared flag/template/sampler state and option lists. No per-tab copies.
-- **Never mutate `flagCore.getFlagValues()` directly.** Write through `setFlagValue`, `setMultipleFlagValues`, or `applyFlagValues` in `ui/js/flag-core.js` so every control and preview receives the sync broadcast.
-- Reuse `CHAT_TEMPLATE_PRESET_OPTIONS` from `ui/js/flags/chat-templates.js` for chat-template dropdowns.
-- Use `textContent` for user/model content. The only HTML-rendering exception is `renderMarkdown()` for model output.
-- Add behavior in focused `window.LlamaGui` modules; no new globals in `app.js`.
-- No JS linter, by design (reviewed 2026-09-11): ordered global scripts share top-level functions across files — e.g. the `presets/` package — which defeats ESLint's per-file analysis; `module_namespace_unit.cjs` and the unit suites enforce the structure instead.
-- Keep platform decisions in the backend.
-- No silent empty `catch`: use `console.debug` for expected optional failures, `console.warn` for unexpected ones.
-- Avoid `instanceof` across realms (`node:vm` tests). Duck-type collections; use `Array.isArray` for arrays.
-- `fetchJson()` in `ui/js/api-client.js` throws on non-JSON, even HTTP 200. Guard against `null` only when the endpoint can return literal JSON `null`.
-
-## Backend
-
-- Mutate shared process, download, tunnel, and install state only under the locks in `backend/state.py`.
-- Log real errors to stderr; send clients `sanitize_error()` output. Never blanket-catch `Exception` without logging it.
-- Validate external input (HF repo IDs, filenames, revisions, paths) before use.
-- Clean partial downloads in `finally`.
-- Normal shutdown goes through `backend/services/lifecycle.py`; `os._exit()` is reserved for restart.
-- On Windows, `CTRL_BREAK_EVENT` requires `CREATE_NEW_PROCESS_GROUP` at process creation; a shared console can cause the signal to hit the parent.
-- `read_body()` returns a `dict`, `None`, or `_BODY_HANDLED` (already responded). Compare the sentinel with `is`, not `==`.
-
-## Feature pitfalls
-
-- **Never expose or emit `-cd` / `ctx_size_draft`.** Keep stale preset values inert.
-- New llama.cpp flags: verify upstream (`common/arg.cpp` / `server.cpp`), add to the owning `ui/js/flags/definitions-*.js` domain (assembled into `FLAGS` by `definitions.js`), match enum values exactly, and set `false_flag` for negated booleans.
-- Fork-only flags: track in `docs/upstream-changes.md`, set `fork_only: true`, and use booleans defaulting to false. Upstream binary compatibility checks exclude them.
-- Upstream-removed flags kept for older builds: set `removed_in: "bNNNNN"`, track in `docs/upstream-changes.md`. The installed-binary compatibility check exempts them on builds at or above the tag; gate any new-build behavior on `supportsLoadModeOnly()`-style build-tag checks.
-- Chat templates: add one `CHAT_TEMPLATE_PRESETS` entry in `ui/js/flags/chat-templates.js`; bundle `.jinja` files under `ui/templates/`. Emit `--chat-template` or `--chat-template-file`, never both, and reverse-map names/paths to the dropdown.
-- Custom launch args: edit `parseCustomLaunchArgs()` in `ui/js/flag-core.js`, extend its unit tests for new cases, and run them immediately. Parser errors must block launch and appear near the textarea.
-- Themes: add one palette block in `ui/css/tokens.css` and one `THEMES` entry in `ui/js/theme-ui.js`. Never add theme selectors or color literals to component stylesheets in `ui/css/`; see the stylesheet load order in `docs/directory.md`.
-- Preserve theme contrast floors: AA for text; 3:1 for `--fg-faint` and fill-only `-solid` tokens, across surfaces, semantic chips, and composited interaction washes. `theme_ui_unit.cjs` enforces the details documented in `docs/tests.md`.
-
-## Verification
-
-Run checks appropriate to the change; use `docs/tests.md` to select focused unit tests.
-
-- **Deliberate CI exception (2026-09-06):** Keep GitHub Actions on Linux and Windows. The maintainer has observed macOS jobs, especially Intel runners, taking hours while Ubuntu jobs finish in roughly 2–3 minutes. Do not add macOS runners as a test-coverage fix; revisit only when the maintainer asks to reconsider the runner limitation. Cover macOS logic with fixtures on the existing runners and document any remaining native checks.
-
-| Change | Required check |
-|--------|----------------|
-| Any JS file | `node --check <path-to-file>` |
-| Flag definitions | `npm run test:flag-definitions` |
-| Custom launch-args parser | `node tests/frontend/custom_launch_args_unit.cjs` |
-| Themes | `node tests/frontend/theme_ui_unit.cjs` |
-| Mirrored controls, shared state, command preview, or DOM wiring | `npm run test:frontend` |
-| Backend | `.venv/Scripts/python.exe -m unittest discover tests -v` |
-| Documentation references | `.venv/Scripts/python.exe -m unittest tests.backend.test_docs_links -v` |
-| Full frontend suite | `npm test` |
-
-Use the **project venv** for backend tests (`.venv/bin/python` on Unix). System Python may lack runtime dependencies and produce misleading failures.
-
-## Environment: uv
-
-`uv` is a supported alternative to `pip` for the project venv; everything works
-the same whether the venv was created with `python -m venv` or `uv venv`.
-
-- The backend install paths are uv-aware: `install.sh` uses `uv venv --seed` +
-  `uv pip install` when `uv` is on PATH (falling back to `python -m venv` +
-  `pip`), and the in-app updater runs `uv pip install --python <sys.executable>`
-  when available (`backend/services/git_update.py:dependency_install_command`),
-  otherwise the venv's own `pip`.
-- `--seed` is required when creating a venv at all: `install.sh`, the in-app
-  updater, and shell workflows that still call `python -m pip` all assume pip
-  exists in the venv. Recreating with a plain (pip-less) `uv venv` breaks them.
-- There is no `pyproject.toml`, so manage dependencies with
-  `uv pip install -r requirements.txt` — do not use `uv sync`.
-- Startup scripts (`mac_linux_start.sh`, `mac_linux_silent_start.sh`) only
-  execute `.venv/bin/python`, so they are uv-agnostic.
+Run backend tests with the project venv, `node --check` on changed JavaScript,
+and `npm test` for UI changes. CI targets Windows and Linux, not macOS.
+Keep upstream attribution and GPL license with reused UI assets.

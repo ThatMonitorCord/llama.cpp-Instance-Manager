@@ -1,4 +1,1 @@
-certifi>=2026.5.20
-ddgs>=7.0.0
-huggingface_hub>=0.32.0
-hf-xet>=1.5.1,<2.0.0
+psutil==7.2.2
