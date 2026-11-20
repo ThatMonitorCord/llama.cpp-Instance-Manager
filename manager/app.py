@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
+import psutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import VERSION
@@ -42,7 +43,7 @@ class Manager:
     def info(self):
         config = self.store.read()
         return {"product": "llama.cpp-instance-manager", "api_version": 1, "version": VERSION,
-                "id": config["id"], "name": config["name"], "port": config["port"]}
+                "id": config["id"], "name": config["name"], "port": config["port"], "pid": os.getpid()}
 
     def start(self):
         self.discovery.start()
@@ -233,7 +234,7 @@ class Manager:
 
     def quit(self):
         if self.instances.active_install:
-            raise ValueError("An instance is being installed. Wait for installation to finish before updating the manager.")
+            raise ValueError("An instance is being installed. Wait for installation to finish before quitting the manager.")
         self.stop_event.set()
         threading.Timer(0.5, self.server.shutdown).start()
         return {"ok": True}
@@ -350,6 +351,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=data_directory())
     parser.add_argument("--background", action="store_true")
+    parser.add_argument("--headless", action="store_true", help="Run without a desktop window or tray (tests and browser-only use)")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-discovery", action="store_true", help="For isolated test servers")
     parser.add_argument("--quit", action="store_true", help="Close this manager for an upgrade; instances keep running")
@@ -367,11 +369,36 @@ def main():
         if info.get("id") != settings["id"]:
             raise SystemExit(1)
         try:
+            process = psutil.Process(info["pid"]) if info.get("pid") else None
+        except psutil.NoSuchProcess:
+            return
+        try:
             request(url + "/api/quit", {}, timeout=3)
+            if process:
+                process.wait(timeout=20)
+            else:
+                time.sleep(1)  # Compatibility with the first release.
+        except psutil.TimeoutExpired:
+            raise SystemExit(1) from None
         except (OSError, ValueError):
             raise SystemExit(1) from None
-        time.sleep(1)
         return
+    session = None
+    try:
+        if os.name == "nt" and not args.headless:
+            from .desktop import DesktopSession
+            session = DesktopSession(args.data_dir)
+            if not session.primary:
+                if not args.background:
+                    session.activate()
+                return
+        launch(args, session)
+    finally:
+        if session:
+            session.close()
+
+
+def launch(args, session=None):
     store = Store(args.data_dir)
     logging.basicConfig(level=logging.INFO, handlers=[RotatingFileHandler(store.directory / "manager.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")], format="%(asctime)s %(levelname)s %(message)s")
     config = store.read()
@@ -382,7 +409,9 @@ def main():
         try:
             existing = request(f"http://127.0.0.1:{config['port']}/api/info", timeout=2)
             if existing.get("id") == config["id"]:
-                if not args.background:
+                if session:
+                    raise ValueError("This manager is already running without its desktop window. Quit it before opening the desktop app.")
+                if not args.background and not args.headless:
                     webbrowser.open(f"http://127.0.0.1:{config['port']}")
                 return
         except (OSError, ValueError):
@@ -398,28 +427,50 @@ def main():
     app = Manager(store)
     if args.no_discovery:
         app.discovery.start = lambda: None
+    server = bind_server(app)
     app.start()
-    opened = args.background
+    worker = None
     try:
-        while not app.stop_event.is_set():
-            app.rebind = False
-            port = store.read()["port"]
-            server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
-            server.daemon_threads = True
-            server.manager = app
-            app.server = server
-            if not opened:
-                webbrowser.open(f"http://127.0.0.1:{port}")
-                opened = True
-            server.serve_forever(poll_interval=0.3)
-            server.server_close()
-            if not app.rebind:
-                break
+        if session:
+            from .desktop import Desktop
+            worker = threading.Thread(target=serve, args=(app, server), name="manager-http", daemon=True)
+            worker.start()
+            Desktop(app, session).run(background=args.background)
+        else:
+            if not args.background and not args.headless:
+                webbrowser.open(f"http://127.0.0.1:{store.read()['port']}")
+            serve(app, server)
     except KeyboardInterrupt:
         logging.info("Manager stopped")
     finally:
         app.stop_event.set()
+        if worker and worker.is_alive():
+            app.server.shutdown()
+            worker.join(timeout=5)
         app.discovery.close()
+
+
+def bind_server(app):
+    server = ThreadingHTTPServer(("0.0.0.0", app.store.read()["port"]), Handler)
+    server.daemon_threads = True
+    server.manager = app
+    app.server = server
+    return server
+
+
+def serve(app, server):
+    try:
+        while not app.stop_event.is_set():
+            app.rebind = False
+            try:
+                server.serve_forever(poll_interval=0.3)
+            finally:
+                server.server_close()
+            if not app.rebind or app.stop_event.is_set():
+                break
+            server = bind_server(app)
+    finally:
+        app.stop_event.set()
 
 
 if __name__ == "__main__":

@@ -18,7 +18,19 @@ Run setup, then follow the first-run wizard to name your server, select an insta
 count, choose folders, and review ports. Setup includes portable Python, Git, and
 Node. Internet access is used to download upstream instances and their dependencies.
 
-The manager starts at Windows login by default. Disable this in Settings if desired.
+The manager opens in its own Windows window. Closing the window keeps it running
+in the system tray; click the tray icon or launch the shortcut again to reopen it.
+The tray menu provides **Open manager**, **Start at Windows login**, and **Quit manager**.
+Quitting the manager leaves running instances alone.
+
+The manager starts quietly in the tray at Windows login by default. Disable this
+in Settings or the tray menu if desired. The dashboard remains available at the
+manager's HTTP address for LAN browsers. Each **Open instance** link opens the
+original LLama-GUI in your browser.
+
+Setup installs Microsoft's WebView2 Runtime if it is missing. Desktop themes and
+menu preferences are saved separately from your regular browser's preferences.
+
 Windows Firewall setup is optional and asks Windows for approval to allow the
 selected TCP ports and discovery UDP 5238 on private networks.
 
@@ -30,7 +42,8 @@ selected TCP ports and discovery UDP 5238 on private networks.
 **Start** starts the control panel and selected saved model/server preset. **Stop**
 stops both. **Restart** stops and starts both using the selected preset. **Open panel
 only** is available while configuring an instance. Closing the manager browser tab
-does not stop the manager or its instances.
+does not stop the manager or its instances. Closing its desktop window has the
+same effect and leaves the tray icon available.
 
 Control panels bind to `0.0.0.0`. New instances include a normal **Manager defaults**
 preset containing their assigned inference port; **Open instance** loads that preset
@@ -76,6 +89,12 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python run_manager.py
 ```
+
+On Windows, normal launches open the desktop window and `--background` starts
+in the tray. Use `--headless` to run only the HTTP server for automated tests or
+browser-only development. Linux source runs retain browser access without desktop
+dependencies. `--quit --data-dir <path>` waits for that manager to exit, preserving
+its instances.
 
 Source runs also need Git and Node on PATH. Windows releases bundle their runtimes.
 See [architecture](docs/directory.md) and [verification](docs/tests.md).

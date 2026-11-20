@@ -11,6 +11,7 @@ No application code is written into the upstream checkout.
 * `manager/app.py`: HTTP routes, setup, direct peer connections, update checks.
 * `manager/discovery.py`: UDP broadcast discovery on port 5238.
 * `manager/platform.py`: Windows user-login startup.
+* `manager/desktop.py`: Windows WebView2 window, tray menu, and per-profile shortcut activation.
 * `manager/web/`: manager UI. Load order: vendor inference-stats, monitor, app.
 * `installer/`: Inno Setup and pinned runtime artifacts.
 * `scripts/`: Windows release build.
@@ -29,3 +30,11 @@ Settings and logs live in `%LOCALAPPDATA%\llama.cpp Instance Manager` by default
 Instance folders are outside the manager application directory. Removing an
 instance from the registry preserves its files. Upgrades replace only manager
 files. Upstream updates continue to use thomas9120/LLama-GUI.
+
+On Windows the desktop runs on the main thread and HTTP runs on a worker thread.
+Closing the window hides it; quitting stops the manager HTTP server and tray, not
+the upstream processes. Named Windows handles prevent duplicate desktop processes
+for the same data directory and signal the existing window when a shortcut is
+launched again. `--background` starts hidden; `--headless` skips the desktop entirely.
+WebView2 preferences live in the profile's `webview/` directory. External instance
+and release links continue opening in the default browser.
