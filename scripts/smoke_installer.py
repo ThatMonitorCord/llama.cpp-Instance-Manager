@@ -48,6 +48,7 @@ def main():
     marker.parent.mkdir(exist_ok=True)
     marker.write_text("preserve test data")
     child=None
+    uninstalled=False
     try:
         for iteration in range(2):
             child=subprocess.Popen([str(exe),"--background","--data-dir",str(store.directory),"--no-discovery"],**hidden_process())
@@ -69,13 +70,14 @@ def main():
                 assert Store(store.directory).read()["name"]=="Upgrade persistence"
             else:
                 subprocess.run([str(destination/"unins000.exe"),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"],env=env,check=True,timeout=120,**hidden_process())
+                uninstalled=True
                 child.wait(timeout=15)
         print("PASS: installed app starts, upgrades, preserves settings/models, and starts again",flush=True)
     finally:
         if child and child.poll() is None:
             child.terminate();child.wait(timeout=15)
         uninstall=destination/"unins000.exe"
-        if uninstall.exists():
+        if not uninstalled and uninstall.exists():
             subprocess.run([str(uninstall),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"],env=env,check=True,timeout=120,**hidden_process())
     assert marker.exists()
     print("PASS: uninstall preserves instance data",flush=True)
