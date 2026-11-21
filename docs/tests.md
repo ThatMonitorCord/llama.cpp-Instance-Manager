@@ -19,7 +19,8 @@ Opt-in real integration checks (Windows, with downloads):
 * After building and `npm ci`: `.venv/Scripts/python scripts/smoke_desktop.py`:
   exercises the real WebView2 window, normal/quiet startup, shortcut reactivation,
   minimize/restore, close-to-tray, tray click activation, persistent theme, and
-  graceful exit. Uses a fresh profile and a test-only WebView2 debugging port.
+  graceful exit. Uses a fresh profile and `--webview-debug-port` to opt into a
+  test-only WebView2 debugging port, including on elevated Windows runners.
   Screenshots and logs stay under `.test-data/desktop-*`. Runs in Windows release CI.
 * `.venv/Scripts/python scripts/smoke_upstream.py`: two unmodified upstream copies,
   independent runtime files, clean Git status, CPU backend installation, a tiny

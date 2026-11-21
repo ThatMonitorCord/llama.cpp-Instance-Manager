@@ -37,6 +37,7 @@ jobs:
         if: always()
         with:
           name: Windows-setup
+          include-hidden-files: true
           path: |
             dist/*-setup.exe
             dist/SHA256SUMS.txt

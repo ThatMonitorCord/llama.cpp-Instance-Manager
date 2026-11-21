@@ -93,11 +93,15 @@ class Desktop:
         self.exiting = True
         self.window.destroy()
 
-    def run(self, background=False):
+    def run(self, background=False, debug_port=None):
         import webview
         import pystray
         from PIL import Image
 
+        # Elevated Windows runners ignore WEBVIEW2_* environment overrides.
+        # This explicit opt-in uses the supported WebView2 API; normally disabled.
+        if debug_port is not None:
+            webview.settings["REMOTE_DEBUGGING_PORT"] = debug_port
         self.window = webview.create_window(
             TITLE, f"http://127.0.0.1:{self.app.store.read()['port']}",
             width=1200, height=820, min_size=(680, 480), hidden=background,

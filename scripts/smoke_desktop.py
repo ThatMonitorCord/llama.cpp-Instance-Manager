@@ -74,8 +74,8 @@ def main():
     port = next_port(16439)
     debug_port = next_port(port + 1)
     store.change(lambda data: data.update(port=port, configured=True, login_start=False, name="Desktop smoke test"))
-    command = [str(args.exe.resolve()), "--data-dir", str(store.directory), "--no-discovery"]
-    env = dict(os.environ, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f"--remote-debugging-port={debug_port}")
+    command = [str(args.exe.resolve()), "--data-dir", str(store.directory), "--no-discovery", "--webview-debug-port", str(debug_port)]
+    env = dict(os.environ, PYWEBVIEW_LOG="debug")
     node = shutil.which("node") or str(ROOT / "build/runtimes/node/node.exe")
     child = None
     try:
@@ -115,6 +115,11 @@ def main():
             assert not windows(child.pid, tray=True), "Tray handles remained after quit"
             print("PASS: startup, single window, minimize/restore, close-to-tray, tray activation and graceful quit", flush=True)
         print(f"Desktop screenshots and logs: {store.directory}", flush=True)
+    except Exception:
+        log = store.directory / "manager.log"
+        if log.exists():
+            print(log.read_text(encoding="utf-8", errors="replace")[-10000:], flush=True)
+        raise
     finally:
         if child and child.poll() is None:
             try:

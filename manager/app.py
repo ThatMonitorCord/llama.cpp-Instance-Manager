@@ -352,6 +352,7 @@ def main():
     parser.add_argument("--data-dir", type=Path, default=data_directory())
     parser.add_argument("--background", action="store_true")
     parser.add_argument("--headless", action="store_true", help="Run without a desktop window or tray (tests and browser-only use)")
+    parser.add_argument("--webview-debug-port", type=port_number, help="Enable WebView2 debugging for local desktop tests")
     parser.add_argument("--port", type=int)
     parser.add_argument("--no-discovery", action="store_true", help="For isolated test servers")
     parser.add_argument("--quit", action="store_true", help="Close this manager for an upgrade; instances keep running")
@@ -435,7 +436,7 @@ def launch(args, session=None):
             from .desktop import Desktop
             worker = threading.Thread(target=serve, args=(app, server), name="manager-http", daemon=True)
             worker.start()
-            Desktop(app, session).run(background=args.background)
+            Desktop(app, session).run(background=args.background, debug_port=args.webview_debug_port)
         else:
             if not args.background and not args.headless:
                 webbrowser.open(f"http://127.0.0.1:{store.read()['port']}")
