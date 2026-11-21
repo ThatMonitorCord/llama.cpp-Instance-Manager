@@ -16,6 +16,11 @@ Native two-machine LAN discovery and GPU inference require physical hosts.
 Opt-in real integration checks (Windows, with downloads):
 
 * `python scripts/prepare_runtimes.py`
+* After building and `npm ci`: `.venv/Scripts/python scripts/smoke_desktop.py`:
+  exercises the real WebView2 window, normal/quiet startup, shortcut reactivation,
+  minimize/restore, close-to-tray, tray click activation, persistent theme, and
+  graceful exit. Uses a fresh profile and a test-only WebView2 debugging port.
+  Screenshots and logs stay under `.test-data/desktop-*`. Runs in Windows release CI.
 * `.venv/Scripts/python scripts/smoke_upstream.py`: two unmodified upstream copies,
   independent runtime files, clean Git status, CPU backend installation, a tiny
   test model, preset compilation, inference counters, and independent restart.
@@ -27,7 +32,9 @@ These scripts do not configure Windows login startup or firewall rules.
 
 * `.venv/Scripts/python scripts/smoke_installer.py`: silent clean setup, installed
   executable startup, upgrade, and uninstall in an isolated workspace directory.
-  Refuses to overwrite an existing user installation. Runs in release CI.
+  Upgrade and uninstall close the running desktop manager through `--quit` and
+  preserve settings/model markers. Refuses to overwrite an existing user
+  installation. Runs in release CI.
 
 ## Initial release verification (2026-11-11)
 

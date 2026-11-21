@@ -27,8 +27,11 @@ def main():
         pass
     setup=next((ROOT/"dist").glob("*-setup.exe"))
     args=[str(setup),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/NOICONS","/MERGETASKS=!desktopicon",f"/DIR={destination}",f"/LOG={ROOT/'.test-data/installer.log'}"]
+    store=Store(ROOT/".test-data/installed-profile")
+    # The installer's --quit child must target this isolated test profile too.
+    env=dict(os.environ, LLAMA_MANAGER_DATA=str(store.directory))
     try:
-        subprocess.run(args,check=True,timeout=180,**hidden_process())
+        subprocess.run(args,env=env,check=True,timeout=180,**hidden_process())
     except subprocess.CalledProcessError:
         log=ROOT/".test-data/installer.log"
         if log.exists():
@@ -39,7 +42,6 @@ def main():
     for binary in ("runtimes/python/python.exe","runtimes/git/cmd/git.exe","runtimes/node/node.exe"):
         assert (destination/binary).is_file(),binary
     print("PASS: clean setup includes the manager and all portable prerequisites",flush=True)
-    store=Store(ROOT/".test-data/installed-profile")
     port=next_port(16239)
     store.change(lambda data:data.update(port=port,name="Upgrade persistence",configured=True,login_start=False))
     marker=store.directory/"models/keep.gguf"
@@ -60,19 +62,21 @@ def main():
                     time.sleep(.25)
             assert ready,"Installed application did not start"
             assert "llama.cpp Instance Manager" in request(f"http://127.0.0.1:{port}/",text=True)
-            subprocess.run([str(exe),"--quit","--background","--data-dir",str(store.directory)],check=True,timeout=15,**hidden_process())
-            child.wait(timeout=15)
             if iteration==0:
-                subprocess.run(args,check=True,timeout=180,**hidden_process())
+                subprocess.run(args,env=env,check=True,timeout=180,**hidden_process())
+                child.wait(timeout=15)
                 assert marker.read_text()=="preserve test data"
                 assert Store(store.directory).read()["name"]=="Upgrade persistence"
+            else:
+                subprocess.run([str(destination/"unins000.exe"),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"],env=env,check=True,timeout=120,**hidden_process())
+                child.wait(timeout=15)
         print("PASS: installed app starts, upgrades, preserves settings/models, and starts again",flush=True)
     finally:
         if child and child.poll() is None:
             child.terminate();child.wait(timeout=15)
         uninstall=destination/"unins000.exe"
         if uninstall.exists():
-            subprocess.run([str(uninstall),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"],check=True,timeout=120,**hidden_process())
+            subprocess.run([str(uninstall),"/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART"],env=env,check=True,timeout=120,**hidden_process())
     assert marker.exists()
     print("PASS: uninstall preserves instance data",flush=True)
 

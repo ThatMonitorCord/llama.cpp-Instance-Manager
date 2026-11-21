@@ -1,4 +1,14 @@
-Windows setup for llama.cpp Instance Manager.
+llama.cpp Instance Manager 0.2.0 adds a dedicated Windows window and system tray.
+
+* Open the dashboard from its desktop/Start menu shortcut without a browser tab.
+* Close the window to keep the manager running in the tray.
+* Reopen the same window from the tray or by launching the shortcut again.
+* Start quietly at Windows login, with a startup toggle in the tray menu.
+* Quit the manager without stopping running llama.cpp instances.
+* Keep desktop theme and menu preferences between launches.
+* Setup checks for WebView2 and installs Microsoft's runtime when needed.
+
+Existing features remain available:
 
 * Install one or several independent upstream LLama-GUI copies.
 * Name your server and choose available manager, control-panel, and inference ports.

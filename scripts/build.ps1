@@ -1,4 +1,4 @@
-param([string]$Version = '0.1.0', [string]$Iscc = '')
+param([string]$Version = '0.2.0', [string]$Iscc = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
@@ -6,7 +6,15 @@ $python = Join-Path $root '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) { throw 'Create .venv and install requirements.txt plus PyInstaller first.' }
 & $python scripts/prepare_runtimes.py
 if ($LASTEXITCODE) { throw 'Runtime preparation failed.' }
-& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name LlamaInstanceManager --icon assets/manager.ico --add-data 'manager/web;manager/web' --add-data 'manager/preset_bridge.cjs;manager' run_manager.py
+$webviewSetup = Join-Path $root 'build\downloads\MicrosoftEdgeWebview2Setup.exe'
+if (-not (Test-Path -LiteralPath $webviewSetup)) {
+    Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $webviewSetup
+}
+$signature = Get-AuthenticodeSignature -LiteralPath $webviewSetup
+if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation,') {
+    throw 'WebView2 bootstrapper must have a valid Microsoft signature.'
+}
+& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name LlamaInstanceManager --icon assets/manager.ico --add-data 'assets/manager.ico;assets' --add-data 'manager/web;manager/web' --add-data 'manager/preset_bridge.cjs;manager' --hidden-import webview.platforms.edgechromium --hidden-import pystray._win32 run_manager.py
 if ($LASTEXITCODE) { throw 'Executable build failed.' }
 Copy-Item -LiteralPath (Join-Path $root 'build\runtimes') -Destination (Join-Path $root 'dist\LlamaInstanceManager\runtimes') -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $root 'dist\LlamaInstanceManager\LICENSE.txt')

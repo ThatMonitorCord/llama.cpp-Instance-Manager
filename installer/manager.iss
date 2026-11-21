@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.2.0"
 #endif
 [Setup]
 AppId={{5E8A15A3-7C9C-47A5-A577-16CE0B45B43B}
@@ -33,6 +33,7 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: checkedonc
 
 [Files]
 Source: "..\dist\LlamaInstanceManager\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\build\downloads\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 
 [Icons]
 Name: "{group}\llama.cpp Instance Manager"; Filename: "{app}\LlamaInstanceManager.exe"
@@ -45,12 +46,35 @@ Filename: "{app}\LlamaInstanceManager.exe"; Description: "Set up or open your ll
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "LlamaCppInstanceManager"; Flags: uninsdeletevalue dontcreatekey
 
 [Code]
+function HasWebView2(): Boolean;
+var
+  Version: String;
+  Key: String;
+begin
+  Key := 'Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  Result := (RegQueryStringValue(HKLM32, Key, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0'));
+  if not Result then
+    Result := (RegQueryStringValue(HKCU, Key, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0'));
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExitCode: Integer;
   Existing: String;
 begin
   Result := '';
+  if not HasWebView2() then begin
+    WizardForm.StatusLabel.Caption := 'Installing Microsoft Edge WebView2 Runtime...';
+    ExtractTemporaryFile('MicrosoftEdgeWebview2Setup.exe');
+    if not Exec(ExpandConstant('{tmp}\MicrosoftEdgeWebview2Setup.exe'), '/silent /install', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then begin
+      Result := 'Could not start WebView2 setup. Run setup again to retry.';
+      Exit;
+    end;
+    if not HasWebView2() then begin
+      Result := 'WebView2 could not be installed. Check your internet connection and run setup again.';
+      Exit;
+    end;
+  end;
   Existing := ExpandConstant('{app}\LlamaInstanceManager.exe');
   if FileExists(Existing) then begin
     if not Exec(Existing, '--quit --background', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
