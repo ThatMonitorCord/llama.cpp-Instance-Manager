@@ -4,7 +4,7 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'../../manager/web');
 const defaults={schema:1,id:'local',name:'Workshop',port:5239,configured:true,login_start:true,instances_dir:'C:\\Instances',instances:[],peers:[]};
 const instance={id:'one',name:'llama.cpp instance 1',gui_port:5240,api_port:9931,path:'C:\\Instances\\one\\LLama-GUI',install_state:'ready',online:true,running:true,preset:'Fast model',loaded_preset:'Fast model',auto_start:false,pid:1,sampled_at:10,status:{active_runtime:{generation:1,model:'model.gguf',port:9931}},metrics:'llamacpp:prompt_tokens_total 2388440\nllamacpp:tokens_predicted_total 499910\nllamacpp:prompt_seconds_total 10000\nllamacpp:tokens_predicted_seconds_total 10000\nllamacpp:requests_processing 2\nllamacpp:requests_deferred 1',slots:[{id:0,id_task:1,is_processing:true,n_ctx:128384,n_prompt_tokens:64558,next_token:{n_decoded:50}},{id:1,id_task:2,is_processing:true,n_ctx:128384,n_prompt_tokens:20,next_token:{n_decoded:1}}]};
-async function fixture(page,{configured=true}={}){
+async function fixture(page,{configured=true,update={current:'0.2.1',latest:'0.2.1',available:false,checked_at:1795200000}}={}){
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const config={...defaults,configured,instances:configured?[instance]:[]};const posts=[];
   await page.route('http://manager.test:5239/**',async route=>{
@@ -17,11 +17,13 @@ async function fixture(page,{configured=true}={}){
       }
       const data={
         '/api/config':config,
-        '/api/fleet':{servers:[{...defaults,product:'llama.cpp-instance-manager',version:'0.1.0',local:true,online:true,instances:configured?[instance]:[],system:{system:{cpu:{percent:24},memory:{used_bytes:16*1073741824,total_bytes:64*1073741824},disk:{}},gpus:[{name:'NVIDIA RTX',vendor:'NVIDIA',utilization_percent:72,memory_used_bytes:12*1073741824,memory_total_bytes:24*1073741824,temperature_c:65}]}}],jobs:[]},
+        '/api/fleet':{servers:[{...defaults,product:'llama.cpp-instance-manager',version:'0.2.1',local:true,online:true,instances:configured?[instance]:[],system:{system:{cpu:{percent:24},memory:{used_bytes:16*1073741824,total_bytes:64*1073741824},disk:{}},gpus:[{name:'NVIDIA RTX',vendor:'NVIDIA',utilization_percent:72,memory_used_bytes:12*1073741824,memory_total_bytes:24*1073741824,temperature_c:65}]}}],jobs:[]},
+        '/api/jobs':[{id:'job1',state:'running',message:'Downloading update…'}],
         '/api/discovery':{managers:[{id:'remote',name:'Living room',url:'http://192.168.1.20:5239'}]},
         '/api/ports':Array.from({length:Number(url.searchParams.get('count')||1)},(_,i)=>({name:`llama.cpp instance ${i+1}`,gui_port:5240+i,api_port:9931+i})),
         '/api/presets':['Fast model','Other model'],
-        '/api/logs':{lines:['Starting llama-server','Model ready']}
+        '/api/logs':{lines:['Starting llama-server','Model ready']},
+        '/api/update':update
       }[name];return route.fulfill({json:data??{}});
     }
     const file=path.join(root,name==='/'?'index.html':name);
@@ -64,4 +66,42 @@ test('startup saves chosen preset and model autostart; controls submit once',asy
 test('mobile drawer closes with Escape and restores focus without horizontal overflow',async({page})=>{
   await page.setViewportSize({width:390,height:844});const {errors}=await fixture(page);await page.getByRole('button',{name:'Open navigation'}).click();await expect(page.locator('#sidebar')).toHaveClass(/open/);await page.keyboard.press('Escape');await expect(page.locator('#open-nav')).toBeFocused();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
+});
+test('sidebar opens changelog and Update starts installation directly',async({page})=>{
+  const update={current:'0.2.1',latest:'0.3.0',available:true,can_install:true,checked_at:1795200000,download:'https://github.com/example/setup.exe',url:'https://github.com/example/release',notes:'# Changes\n- Faster startup\n<img src=x onerror=alert(1)>'};
+  const {errors,posts}=await fixture(page,{update});
+  await expect(page.locator('#update-indicator')).toHaveText('Update 0.3.0 available');
+  await page.locator('#update-indicator').click();
+  await expect(page.locator('#update-dialog')).toBeVisible();
+  await expect(page.locator('#update-notes')).toContainText('Faster startup');
+  await expect(page.locator('#update-notes img')).toHaveCount(0);
+  await expect(page.locator('#download-update')).toBeHidden();
+  await expect(page.locator('#update-dialog')).toContainText('ThatMonitorCord');
+  await expect(page.locator('#update-status')).toContainText('You have 0.2.1');
+  if(process.env.CAPTURE_UI)await page.screenshot({path:'test-results/updates.png',fullPage:true});
+  const manual=page.waitForRequest(request=>request.url().endsWith('/api/update?force=1'));
+  await page.locator('#check-update').click();await manual;
+  await expect(page.locator('#check-update')).toBeEnabled();
+  await page.locator('#install-update').click();
+  await expect(page.locator('#install-update')).toBeDisabled();
+  expect(posts.filter(row=>row.path==='/api/update/apply')).toEqual([{path:'/api/update/apply',body:{version:'0.3.0'}}]);
+  expect(errors).toEqual([]);
+});
+test('older published releases are not offered as updates and network failures allow retry',async({page})=>{
+  await fixture(page,{update:{current:'0.2.1',latest:'0.1.0',available:false,checked_at:1795200000}});
+  await page.locator('#update-indicator').click();
+  await expect(page.locator('#update-status')).toHaveText('Version 0.2.1 installed. Latest published release: 0.1.0.');
+  await expect(page.locator('#update-indicator')).toHaveText('Version 0.2.1');await expect(page.locator('#install-update')).toBeHidden();
+  await page.route('**/api/update?force=1',route=>route.fulfill({json:{error:'Could not check for updates. Check your connection and try again.'}}));
+  await page.locator('#check-update').click();
+  await expect(page.locator('#update-status')).toContainText('Check your connection');
+  await expect(page.locator('#check-update')).toBeEnabled();
+});
+test('current version stays in sidebar and update dialog closes with Escape',async({page})=>{
+  await fixture(page);
+  await expect(page.locator('#update-indicator')).toHaveText('Version 0.2.1');
+  await page.locator('#update-indicator').click();
+  await expect(page.locator('#update-status')).toHaveText("You're up to date (0.2.1).");
+  await page.keyboard.press('Escape');await expect(page.locator('#update-dialog')).toBeHidden();
+  await expect(page.locator('#update-indicator')).toBeFocused();
 });

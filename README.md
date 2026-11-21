@@ -61,9 +61,17 @@ Monitor card order/visibility, themes, and navigation preferences are saved in t
 
 ## Updates and removal
 
-**Settings → Check for updates** links to this fork's latest Windows installer.
-Run it to update the manager. Each independent LLama-GUI instance still updates
-through its original upstream installer and app-update controls.
+The sidebar shows the installed version, or **Update [version] available**.
+Click it to read the changelog, then choose **Update**. Installed Windows managers
+download and verify the release, apply it without setup prompts, and reopen the
+same manager profile. Checks run when the dashboard opens and every six hours;
+**Check for updates** also checks on demand. Updates come from this fork.
+
+When running the standalone setup yourself, an existing installation offers
+**Update existing installation** or **Reinstall program**. Reinstall replaces
+missing or damaged program files. Both choices preserve settings, instances,
+and models. Setup shows the installed and included versions before you proceed.
+Each independent LLama-GUI instance still updates through its original controls.
 
 Manager settings are stored under `%LOCALAPPDATA%\llama.cpp Instance Manager`.
 Instances default to its `instances` subfolder but can be installed elsewhere.
@@ -100,6 +108,8 @@ Source runs also need Git and Node on PATH. Windows releases bundle their runtim
 See [architecture](docs/directory.md) and [verification](docs/tests.md).
 
 ## Attribution
+
+Manager and Windows installer created by [ThatMonitorCord](https://github.com/ThatMonitorCord).
 
 Based on the menus and monitoring of Thomas9120's LLama-GUI. Theme tokens,
 inference-stat calculations, and logo assets are reused under GPL-3.0.

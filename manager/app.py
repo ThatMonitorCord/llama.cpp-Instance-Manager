@@ -12,18 +12,18 @@ import socket
 import threading
 import time
 import urllib.parse
-import urllib.request
 import uuid
 import webbrowser
 import psutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import VERSION
-from .config import Store, REPOSITORY, data_directory, label, next_port, port_available, port_number, suggest_ports
+from .config import Store, data_directory, label, next_port, port_available, port_number, suggest_ports
 from .discovery import Discovery
 from .instances import Instances, process_for
 from .platform import login_start, configure_firewall
 from .transport import manager_url, request
+from .updates import UpdateChecker
 
 WEB = Path(__file__).resolve().parent / "web"
 
@@ -39,6 +39,8 @@ class Manager:
         self.rebind = False
         self.local = {**self.info(), "instances": [], "system": None, "sampled_at": 0}
         self.peers = []
+        self.updates = UpdateChecker(store)
+        self.update_lock = threading.Lock()
 
     def info(self):
         config = self.store.read()
@@ -128,6 +130,7 @@ class Manager:
         return {"ok": True, "port": port}
 
     def setup(self, body):
+        self.ensure_not_updating()
         # Validate everything before writing settings or starting downloads.
         current = self.store.read()
         if current["configured"]:
@@ -148,6 +151,7 @@ class Manager:
         return {**result, "port": target_port}
 
     def add_instances(self, body):
+        self.ensure_not_updating()
         result = self.instances.install(body.get("instances"), body.get("directory", ""), body.get("models_dir", ""))
         if body.get("firewall"):
             self.instances.job("Allow LAN access", lambda progress: configure_firewall(self.store))
@@ -181,6 +185,7 @@ class Manager:
             return self.instances.job(f"{action.title()} remote instance", follow)
         instance = self.store.instance(identity)
         if action == "retry":
+            self.ensure_not_updating()
             with self.instances.guard:
                 if self.instances.active_install:
                     raise ValueError("An installation is already running.")
@@ -224,13 +229,24 @@ class Manager:
             handle.seek(max(0, path.stat().st_size - 32000))
             return {"lines": handle.read().decode("utf-8", errors="replace").splitlines()[-200:]}
 
-    def update(self):
-        req = urllib.request.Request(f"https://api.github.com/repos/{REPOSITORY}/releases/latest", headers={"User-Agent": "llama.cpp-Instance-Manager"})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            release = json.load(response)
-        installer = next((asset for asset in release.get("assets", []) if asset["name"].endswith("-setup.exe")), None)
-        return {"current": VERSION, "latest": release["tag_name"].lstrip("v"), "url": release["html_url"],
-                "download": installer["browser_download_url"] if installer else None}
+    def update(self, force=False):
+        return self.updates.check(force=force)
+
+    def ensure_not_updating(self):
+        if self.update_lock.locked():
+            raise ValueError("Wait for the manager update to finish.")
+
+    def apply_update(self, body):
+        if self.instances.active_install:
+            raise ValueError("Wait for instance installation to finish before updating the manager.")
+        if not self.update_lock.acquire(blocking=False):
+            raise ValueError("A manager update is already running.")
+        def apply(progress):
+            try:
+                return self.updates.apply(body.get("version"), progress)
+            finally:
+                self.update_lock.release()
+        return self.instances.job("Update manager", apply)
 
     def quit(self):
         if self.instances.active_install:
@@ -292,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/logs":
                 return self.send(app.logs(query.get("instance_id"), query.get("server_id")))
             if parsed.path == "/api/update":
-                return self.send(app.update())
+                return self.send(app.update(force=query.get("force") == "1"))
             if parsed.path.startswith("/api/"):
                 return self.send({"error": "Endpoint not found"}, 404)
             relative = urllib.parse.unquote(parsed.path).lstrip("/") or "index.html"
@@ -323,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
                       "/api/startup": app.startup, "/api/connect": lambda data: app.connect(data.get("url")),
                       "/api/firewall": lambda data: app.instances.job("Allow LAN access", lambda progress: configure_firewall(app.store)),
                       "/api/quit": lambda data: app.quit(),
+                      "/api/update/apply": app.apply_update,
                       "/api/install": app.add_instances}
             if self.path in routes:
                 result = routes[self.path](body)

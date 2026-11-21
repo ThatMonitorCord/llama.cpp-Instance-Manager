@@ -1,4 +1,13 @@
-llama.cpp Instance Manager 0.2.0 adds a dedicated Windows window and system tray.
+llama.cpp Instance Manager 0.2.1 adds a sidebar updater and clearer setup choices.
+
+* See your installed version or an available update directly in the sidebar.
+* Click to read the changelog, then Update to install automatically and reopen the manager.
+* Automatic checks offer newer releases from this fork and verify downloaded installers.
+* Manual setup offers Update existing installation and Reinstall program, with both versions displayed.
+* Settings, instances, models, and running inference are preserved.
+* Visible manager and installer credit to ThatMonitorCord, with upstream LLama-GUI attribution retained.
+
+Also includes the dedicated Windows window and system tray:
 
 * Open the dashboard from its desktop/Start menu shortcut without a browser tab.
 * Close the window to keep the manager running in the tray.

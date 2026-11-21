@@ -33,8 +33,11 @@ These scripts do not configure Windows login startup or firewall rules.
 
 * `.venv/Scripts/python scripts/smoke_installer.py`: silent clean setup, installed
   executable startup, upgrade, and uninstall in an isolated workspace directory.
-  Upgrade and uninstall close the running desktop manager through `--quit` and
-  preserve settings/model markers. Refuses to overwrite an existing user
+  Tests explicit Update and Reinstall modes, repairs a missing program asset,
+  verifies the updater's download/checksum/silent-install/reopen path using the
+  built setup as a release fixture, and preserves settings/model markers.
+  Upgrade and uninstall close the running desktop manager through `--quit`.
+  Refuses to overwrite an existing user
   installation. Runs in release CI.
 
 ## Initial release verification (2026-11-11)

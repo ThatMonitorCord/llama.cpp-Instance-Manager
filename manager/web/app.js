@@ -8,6 +8,7 @@
     const instanceCards = new Map(), monitorCards = new Map();
     let hiddenCards = readStored("manager-hidden-cards", []), cardOrder = readStored("manager-card-order", []);
     let dragged = null, noticeTimer;
+    let checkingUpdate = false, applyingUpdate = false, updateInfo = null;
 
     function readStored(key, fallback) {
         try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
@@ -53,6 +54,74 @@
         return address(server, instance.gui_port) + "/?preset=" + encodeURIComponent(instance.preset || "Manager defaults");
     }
     function setLink(el, url) { el.href = url; el.target = "_blank"; el.rel = "noopener"; }
+    function releaseNotes(text) {
+        const notes = $("update-notes"); notes.replaceChildren(); let list;
+        for (const line of String(text || "No changelog is available yet.").split(/\r?\n/)) {
+            if (!line.trim()) { list = null; continue; }
+            const bullet = line.match(/^\s*[-*] (.+)/), heading = line.match(/^#{1,3} (.+)/);
+            if (bullet) {
+                if (!list) { list = node("ul"); notes.append(list); }
+                list.append(node("li", "", bullet[1]));
+            } else { list = null; notes.append(node(heading ? "h3" : "p", "", heading ? heading[1] : line)); }
+        }
+    }
+    async function checkUpdate(force = false) {
+        if (checkingUpdate || applyingUpdate) return;
+        checkingUpdate = true; $("check-update").disabled = true;
+        try {
+            const update = await api(`/api/update${force ? "?force=1" : ""}`);
+            if (update.error) throw new Error(update.error);
+            updateInfo = update;
+            $("update-status").textContent = update.available
+                ? `Version ${update.latest} is available. You have ${update.current}.`
+                : !update.latest ? `Version ${update.current} installed. No published releases yet.`
+                : update.current === update.latest ? `You're up to date (${update.current}).`
+                : `Version ${update.current} installed. Latest published release: ${update.latest}.`;
+            $("update-checked").textContent = update.checked_at ? `Last checked: ${new Date(update.checked_at * 1000).toLocaleString()}` : "";
+            $("update-indicator").classList.toggle("primary", !!update.available);
+            $("update-indicator").textContent = update.available ? `Update ${update.latest} available` : `Version ${update.current}`;
+            $("install-update").hidden = !update.available || !update.can_install;
+            $("install-update").textContent = `Update to ${update.latest}`;
+            $("download-update").hidden = !update.available || !update.download || update.can_install;
+            if (update.available && update.download) setLink($("download-update"), update.download);
+            $("update-release").hidden = !update.url;
+            if (update.url) setLink($("update-release"), update.url);
+            releaseNotes(update.notes);
+            $("update-help").textContent = update.can_install
+                ? "Update installs automatically and reopens the manager. Your settings, llama.cpp instances, and models are kept. Running instances stay running."
+                : "Checks automatically when you open the manager and every six hours.";
+        } catch (error) {
+            $("update-status").textContent = error.message;
+        } finally {
+            checkingUpdate = false; $("check-update").disabled = false;
+        }
+    }
+    async function installUpdate() {
+        if (applyingUpdate || !updateInfo?.can_install) return;
+        applyingUpdate = true; $("install-update").disabled = true; $("check-update").disabled = true;
+        const version = updateInfo.latest;
+        try {
+            const result = await api("/api/update/apply", {version});
+            $("update-status").textContent = "Preparing update…";
+            for (let attempt = 0; attempt < 900; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                let jobs;
+                try { jobs = await api("/api/jobs"); } catch { continue; }
+                const job = jobs.find(row => row.id === result.job);
+                if (job?.state === "error") throw new Error(job.message);
+                if (job) $("update-status").textContent = job.message;
+                if (!job || job.state === "complete") {
+                    const info = await api("/api/info");
+                    if (info.version === version) { location.reload(); return; }
+                }
+            }
+            throw new Error("The update did not finish. See manager-update.log in the manager data folder.");
+        } catch (error) {
+            $("update-status").textContent = error.message;
+        } finally {
+            applyingUpdate = false; $("install-update").disabled = false; $("check-update").disabled = false;
+        }
+    }
     function setNav(open) {
         $("sidebar").classList.toggle("open", open); $("backdrop").hidden = !open;
         $("open-nav").setAttribute("aria-expanded", String(open));
@@ -115,7 +184,7 @@
         $("total-instances").textContent = all.length; $("running-instances").textContent = all.filter(row => row.instance.running).length;
         $("total-servers").textContent = servers.filter(server => server.online).length;
         $("sidebar-summary").textContent = `${all.filter(row => row.server.local && row.instance.running).length} models running locally`;
-        if (servers[0]?.version) $("version").textContent = `Instance Manager ${servers[0].version}`;
+        if (!updateInfo && servers[0]?.version) $("update-indicator").textContent = `Version ${servers[0].version}`;
         options($("instance-filter"), servers, true); options($("monitor-filter"), servers, true);
         options($("log-instance"), all.map(({server,instance}) => ({id:`${server.id}/${instance.id}`,name:`${server.name} / ${instance.name}`})));
         if (tab === "instances") renderInstances(all);
@@ -372,9 +441,13 @@
     on("startup-form","submit",async event=>{event.preventDefault();await api("/api/startup",{instance_id:startupInstance.id,preset:$("startup-preset").value,auto_start:$("startup-auto").checked});$("startup-dialog").close();await refreshConfig();notice("Startup settings saved.");await poll();});
     on("settings-form","submit",async event=>{event.preventDefault();const result=await api("/api/settings",{name:$("settings-name").value,port:Number($("settings-port").value),login_start:$("settings-login").checked});if(result.port!==Number(location.port))reconnect(result.port);else{await refreshConfig();notice("Settings saved.");}});
     on("allow-lan","click",async()=>{await api("/api/firewall",{});await poll();});
-    on("check-update","click",async()=>{$("check-update").disabled=true;try{const update=await api("/api/update");$("update-status").textContent=update.current===update.latest?`You're up to date (${update.current}).`:`Version ${update.latest} is available. Current version: ${update.current}.`;$("download-update").hidden=!update.download||update.current===update.latest;if(update.download)setLink($("download-update"),update.download);}finally{$("check-update").disabled=false;}});
+    on("check-update","click",()=>checkUpdate(true));
+    on("update-indicator","click",()=>{if(matchMedia("(max-width:680px)").matches)setNav(false);$("update-dialog").showModal();checkUpdate();});
+    on("install-update","click",installUpdate);
     document.addEventListener("visibilitychange",()=>{if(!document.hidden)run(poll);});
     setInterval(()=>{if(!document.hidden&&(tab==="servers"||$("setup-dialog").open&&wizardStep===2))run(discover);},10000);
+    setInterval(()=>checkUpdate(),6*60*60*1000);
+    checkUpdate();
     run(async()=>{
         await refreshConfig();
         const saved=readStored("manager-tab","instances");switchTab(["instances","monitor","servers","settings"].includes(saved)?saved:"instances");

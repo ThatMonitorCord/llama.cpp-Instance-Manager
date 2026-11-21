@@ -12,6 +12,7 @@ No application code is written into the upstream checkout.
 * `manager/discovery.py`: UDP broadcast discovery on port 5238.
 * `manager/platform.py`: Windows user-login startup.
 * `manager/desktop.py`: Windows WebView2 window, tray menu, and per-profile shortcut activation.
+* `manager/updates.py`: cached release metadata, numeric version comparison, verified download, and silent Windows update handoff.
 * `manager/web/`: manager UI. Load order: vendor inference-stats, monitor, app.
 * `installer/`: Inno Setup and pinned runtime artifacts.
 * `scripts/`: Windows release build.
@@ -24,6 +25,7 @@ GET routes: `/api/info`, `/api/config`, `/api/fleet`, `/api/state`, `/api/jobs`,
 `/api/discovery`, `/api/ports`, `/api/presets`, `/api/logs`, `/api/update`.
 POST routes: `/api/setup`, `/api/settings`, `/api/action`, `/api/startup`,
 `/api/connect`, `/api/install`, `/api/disconnect`, `/api/remove`, `/api/firewall`, `/api/quit`.
+`POST /api/update/apply` starts an update job for the version chosen in the sidebar.
 `/api/state` includes only local instances; peers never recursively aggregate.
 
 Settings and logs live in `%LOCALAPPDATA%\llama.cpp Instance Manager` by default.
@@ -38,3 +40,11 @@ for the same data directory and signal the existing window when a shortcut is
 launched again. `--background` starts hidden; `--headless` skips the desktop entirely.
 WebView2 preferences live in the profile's `webview/` directory. External instance
 and release links continue opening in the default browser.
+
+The sidebar checks the fork's latest stable release on load and every six hours.
+Checks are cached for one hour across clients; manual checks bypass the cache.
+Only newer versions are offered. On registered Windows installations, Update
+downloads the setup and SHA256SUMS.txt from the fork, verifies the installer, and
+runs setup silently with the existing installation path and profile. Setup closes
+the manager via `--quit` and reopens it after installation. Upstream instances
+remain independent. Manual setup keeps explicit Update and Reinstall choices.
