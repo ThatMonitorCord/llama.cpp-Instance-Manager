@@ -29,10 +29,10 @@ jobs:
           $version = (& .venv/Scripts/python -c "from manager import VERSION; print(VERSION)").Trim()
           if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") { throw 'Tag and application version differ' }
           ./scripts/build.ps1 -Version $version
-      - name: Verify native window and tray lifecycle
-        run: .venv/Scripts/python scripts/smoke_desktop.py
       - name: Verify installed executable and upgrade
         run: .venv/Scripts/python scripts/smoke_installer.py
+      - name: Verify native window and tray lifecycle
+        run: .venv/Scripts/python scripts/smoke_desktop.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
